@@ -52,7 +52,8 @@ namespace Telegram_back.Controllers
                 MediaUrl = url,
                 SentAt = DateTime.UtcNow,
                 SenderId = user.Id,
-                ChatId = chat.Id
+                ChatId = chat.Id,
+                MediaType = dto.MediaType,
             };
 
             _context.Messages.Add(message);
@@ -74,6 +75,7 @@ namespace Telegram_back.Controllers
                 SentAt = message.SentAt,
                 SenderUsername = user.Username,
                 SenderId = user.Id,
+                MediaType = message.MediaType
             };
 
             return Ok(response);
@@ -224,7 +226,8 @@ namespace Telegram_back.Controllers
                     MediaUrl = m.MediaUrl,
                     SentAt = m.SentAt,
                     SenderUsername = m.Sender.Username,
-                    SenderId = m.Sender.Id
+                    SenderId = m.Sender.Id,
+                    MediaType = m.MediaType
                 })
                 .ToList();
 

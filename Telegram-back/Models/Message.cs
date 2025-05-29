@@ -17,6 +17,8 @@
 
         public MessageStatus Status { get; set; } = MessageStatus.Sent;
 
+        public MediaType MediaType { get; set; }
+
         public int SenderId { get; set; }
         public User Sender { get; set; }
 
