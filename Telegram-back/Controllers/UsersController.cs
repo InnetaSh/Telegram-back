@@ -78,23 +78,23 @@ public class UsersController : ControllerBase
         return Ok(chats);
     }
 
-    //[HttpGet("by-username")]
-    //public async Task<IActionResult> GetUserByName([FromQuery] string username)
-    //{
-    //    var user = await _context.Users
-    //        .Where(u => u.Username == username)
-    //        .Select(u => new
-    //        {
-    //            u.Id,
-    //            u.Username,
-    //            u.Email
-    //        })
-    //        .FirstOrDefaultAsync();
+    [HttpGet("by-username")]
+    public async Task<IActionResult> GetUserByName([FromQuery] string username)
+    {
+        var user = await _context.Users
+            .Where(u => u.Username == username)
+            .Select(u => new
+            {
+                u.Id,
+                u.Username,
+                u.Email
+            })
+            .FirstOrDefaultAsync();
 
-    //    if (user == null)
-    //        return NotFound(new { message = "Пользователь не найден" });
+        if (user == null)
+            return NotFound(new { message = "Пользователь не найден" });
 
-    //    return Ok(user);
-    //}
+        return Ok(user);
+    }
 }
 

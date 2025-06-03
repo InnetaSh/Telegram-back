@@ -15,26 +15,56 @@ public class ChatsController : ControllerBase
     }
 
     /// Поиск пользователей по имени.
-    [HttpGet("private-contacts")]
-    public async Task<IActionResult> GetPrivateChatContacts([FromQuery] int userId)
+    //[HttpGet("private-contacts")]
+    //public async Task<IActionResult> GetPrivateChatContacts([FromQuery] int userId)
+    //{
+    //    var contacts = await _context.ChatUsers
+    //        .Where(cu => cu.UserId == userId && !cu.Chat.IsGroup)
+    //        .SelectMany(cu => cu.Chat.ChatUsers)
+    //        .Where(cu => cu.UserId != userId) 
+    //        .Select(cu => new
+    //        {
+    //            cu.User.Id,
+    //            cu.User.Username,
+    //            cu.User.Email,
+    //            cu.User.AvatarUrl,
+    //            ChatId = cu.ChatId
+    //        })
+    //        .Distinct() 
+    //        .ToListAsync();
+
+    //    return Ok(contacts);
+    //}
+    [HttpGet("all-contacts")]
+    public async Task<IActionResult> GetAllChatContacts([FromQuery] int userId)
     {
-        var contacts = await _context.ChatUsers
-            .Where(cu => cu.UserId == userId && !cu.Chat.IsGroup)
-            .SelectMany(cu => cu.Chat.ChatUsers)
-            .Where(cu => cu.UserId != userId) 
-            .Select(cu => new
+     
+        var chats = await _context.Chats
+            .Where(c => c.ChatUsers.Any(cu => cu.UserId == userId))
+            .Include(c => c.ChatUsers)
+                .ThenInclude(cu => cu.User)
+            .ToListAsync();
+
+        var result = chats.Select(chat => new
+        {
+            ChatId = chat.Id,
+            IsGroup = chat.IsGroup,
+            Title = chat.IsGroup ? chat.Title : chat.ChatUsers.FirstOrDefault(u => u.UserId != userId)?.User.Username,
+            AvatarUrl = chat.IsGroup
+                ? "https://cdn-icons-png.flaticon.com/512/166/166258.png"
+                : chat.ChatUsers.FirstOrDefault(u => u.UserId != userId)?.User.AvatarUrl,
+            Members = chat.ChatUsers.Select(cu => new
             {
                 cu.User.Id,
                 cu.User.Username,
-                cu.User.Email,
                 cu.User.AvatarUrl,
-                ChatId = cu.ChatId
+                cu.User.Email
             })
-            .Distinct() 
-            .ToListAsync();
+        });
 
-        return Ok(contacts);
+        return Ok(result);
     }
+
 
 
 
@@ -112,9 +142,13 @@ public class ChatsController : ControllerBase
         return Ok("Чат удалён");
     }
 
-  
+
     /// Поиск пользователей по имени.
-    
+
+
+
+
+
     [HttpGet("search-users")]
     public async Task<IActionResult> SearchUsers([FromQuery] string query)
     {

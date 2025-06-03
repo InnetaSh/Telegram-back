@@ -9,6 +9,11 @@
         public string SenderUsername { get; set; }
         public int SenderId { get; set; }
 
-        public MediaType MediaType { get; set; }
+        public MediaType? MediaType { get; set; }
+    }
+
+    public class TextRequest
+    {
+        public string Text { get; set; }
     }
 }

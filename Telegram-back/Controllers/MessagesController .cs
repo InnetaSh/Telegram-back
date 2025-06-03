@@ -253,7 +253,7 @@ namespace Telegram_back.Controllers
 
             await _context.SaveChangesAsync();
 
-            return Ok("Сщщбщение удалено");
+            return Ok("Сообщение удалено");
         }
 
 
