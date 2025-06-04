@@ -18,6 +18,8 @@ namespace Telegram_back.Service
 
         public async Task<string> UploadFileAsync(IFormFile file)
         {
+            if (file == null)
+                throw new ArgumentNullException(nameof(file), "File cannot be null");
             var fileName = Guid.NewGuid() + Path.GetExtension(file.FileName);
             var blobClient = _containerClient.GetBlobClient(fileName);
             await using var stream = file.OpenReadStream();
@@ -32,6 +34,21 @@ namespace Telegram_back.Service
 
             var blobClient = _containerClient.GetBlobClient(blobName);
             await blobClient.DeleteIfExistsAsync();
+        }
+
+        public async Task<string> UploadStreamAsync(Stream stream, string fileName)
+        {
+            
+            var blobClient = _containerClient.GetBlobClient(fileName);
+
+            await blobClient.UploadAsync(stream, overwrite: true);
+
+            return blobClient.Uri.ToString();
+        }
+
+        public BlobClient GetBlobClient(string fileName)
+        {
+            return _containerClient.GetBlobClient(fileName);
         }
     }
 }

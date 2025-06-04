@@ -10,6 +10,7 @@
         public int SenderId { get; set; }
 
         public MediaType? MediaType { get; set; }
+
     }
 
     public class TextRequest

@@ -1,4 +1,6 @@
-﻿namespace Telegram_back.Models
+﻿using Newtonsoft.Json;
+
+namespace Telegram_back.Models
 {
     public class User
     {
@@ -11,6 +13,8 @@
         public string Token { get; set; }
 
         public ICollection<ChatUser> ChatUsers { get; set; }
+
+        [JsonIgnore]
         public ICollection<Message> Messages { get; set; }
     }
 

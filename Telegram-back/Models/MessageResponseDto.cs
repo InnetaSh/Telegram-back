@@ -8,6 +8,7 @@
         public DateTime SentAt { get; set; }
         public string SenderUsername { get; set; }
         public int SenderId { get; set; }
+        public int ChatId { get; set; }
         public MediaType? MediaType { get; set; }
     }
 }

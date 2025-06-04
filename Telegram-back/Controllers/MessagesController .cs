@@ -9,6 +9,9 @@ using Telegram_back.Service;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using Microsoft.CognitiveServices.Speech.Transcription;
+using Newtonsoft.Json;
+using static NAudio.Wave.WaveInterop;
+using System.Text;
 
 namespace Telegram_back.Controllers
 {
@@ -45,6 +48,9 @@ namespace Telegram_back.Controllers
                 url = await _blobService.UploadFileAsync(dto.MediaUrl);
 
             }
+           
+          
+
 
             var message = new Message
             {
@@ -53,11 +59,30 @@ namespace Telegram_back.Controllers
                 SentAt = DateTime.UtcNow,
                 SenderId = user.Id,
                 ChatId = chat.Id,
-                MediaType = dto.MediaType,
+                MediaType = dto.MediaType
             };
 
-            _context.Messages.Add(message);
-            await _context.SaveChangesAsync();
+            try
+            {
+                _context.Messages.Add(message);
+
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception ex) { }
+
+            var messageNew = new StoredMessageDto
+            {
+                MessageId = message.Id,
+                Text = dto.Text,
+                MediaUrl = url,
+                SenderId = user.Id,
+                ChatId = chat.Id,
+                MediaType = dto.MediaType
+            };
+
+            var blobUrl = await AppendMessageToBlobAsync(messageNew);
+          
+
 
             await _hubContext.Clients.Group(dto.ChatId.ToString()).SendAsync("ReceiveMessage", new
             {
@@ -67,6 +92,7 @@ namespace Telegram_back.Controllers
                 Sender = user.Username
             });
 
+        
             var response = new MessageResponseDto
             {
                 Id = message.Id,
@@ -75,183 +101,116 @@ namespace Telegram_back.Controllers
                 SentAt = message.SentAt,
                 SenderUsername = user.Username,
                 SenderId = user.Id,
-                MediaType = message.MediaType
+                MediaType = message.MediaType,
+                ChatId = chat.Id
             };
 
+            
             return Ok(response);
         }
 
 
-        //[HttpPost]
-        //[Consumes("multipart/form-data")]
-        //public async Task<IActionResult> SendMessage([FromForm] SendMessageDto dto)
-        //{
-        //    var email = User.FindFirst(ClaimTypes.Email)?.Value;
-        //    if (string.IsNullOrEmpty(email)) return Unauthorized();
+   
+        private async Task<string> AppendMessageToBlobAsync(StoredMessageDto message)
+        {
+            var messages = await GetMessagesFromBlobAsync(message.ChatId.ToString());
 
-        //    var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
-        //    if (user == null) return Unauthorized();
+            messages.Add(message);
 
-        //    var chat = await _context.Chats.FindAsync(dto.ChatId);
-        //    if (chat == null) return NotFound("Чат не найден");
+            var updatedJson = JsonConvert.SerializeObject(messages, Formatting.Indented);
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(updatedJson));
 
-        //    string url = null;
-        //    if (dto.MediaUrl != null && dto.MediaUrl.Length > 0)
-        //    {
-        //        url = await _blobService.UploadFileAsync(dto.MediaUrl);
-        //    }
+            string blobFileName = $"chat_{message.ChatId}.json";
+            string blobUrl = await _blobService.UploadStreamAsync(stream, blobFileName);
 
-        //    var message = new Message
-        //    {
-        //        Text = dto.Text,
-        //        MediaUrl = url,
-        //        SentAt = DateTime.UtcNow,
-        //        SenderId = user.Id,
-        //        ChatId = chat.Id
-        //    };
+            return blobUrl;
+        }
 
-        //    _context.Messages.Add(message);
-        //    await _context.SaveChangesAsync();
+        private async Task<List<StoredMessageDto>> GetMessagesFromBlobAsync(string chatId)
+        {
+            string blobFileName = $"chat_{chatId}.json";
+            var blobClient = _blobService.GetBlobClient(blobFileName);
 
-        //    await _hubContext.Clients.Group(dto.ChatId.ToString()).SendAsync("ReceiveMessage", new
-        //    {
-        //        message.Id,
-        //        message.Text,
-        //        message.SentAt,
-        //        Sender = user.Username
-        //    });
+            if (!await blobClient.ExistsAsync())
+                return new List<StoredMessageDto>();
 
-        //    var response = new MessageResponseDto
-        //    {
-        //        Id = message.Id,
-        //        Text = message.Text,
-        //        MediaUrl = message.MediaUrl,
-        //        SentAt = message.SentAt,
-        //        SenderUsername = user.Username
-        //    };
-
-        //    return Ok(response);
-        //}
-
-
-
-
-
-
-
-        //[HttpPost]
-        //[Consumes("multipart/form-data")]
-        //public async Task<IActionResult> SendMessage([FromForm] SendMessageDto dto)
-        //{
-        //    var chat = await _context.Chats.FindAsync(dto.ChatId);
-        //    var user = await _context.Users.FindAsync(dto.SenderId);
-        //    if (chat == null || user == null) return NotFound();
-
-        //    string audioUrl = null;
-
-        //    if (!string.IsNullOrWhiteSpace(dto.Text))
-        //    {
-        //        var config = SpeechConfig.FromSubscription(_speechKey, _speechRegion);
-        //        // Можно выбрать формат mp3:
-        //        // config.SetSpeechSynthesisOutputFormat(SpeechSynthesisOutputFormat.Audio16Khz128KBitRateMonoMp3);
-
-        //        using var synthesizer = new SpeechSynthesizer(config, null);
-        //        var result = await synthesizer.SpeakTextAsync(dto.Text);
-
-        //        if (result.Reason == ResultReason.SynthesizingAudioCompleted)
-        //        {
-        //            using var audioStream = AudioDataStream.FromResult(result);
-
-        //            // Сохраняем аудио во временный файл
-        //            var tempFile = Path.GetTempFileName() + ".wav";
-        //            await audioStream.SaveToWaveFileAsync(tempFile);
-
-        //            IFormFile formFile = CreateFormFileFromPath(tempFile);
-
-        //            audioUrl = await _blobService.UploadFileAsync(formFile);
-
-        //            // Удаляем временный файл
-        //            System.IO.File.Delete(tempFile);
-        //        }
-        //        else if (result.Reason == ResultReason.Canceled)
-        //        {
-        //            var cancellation = SpeechSynthesisCancellationDetails.FromResult(result);
-        //            // Можно залогировать ошибку, но пока пропускаем
-        //        }
-        //    }
-
-        //    var message = new Message
-        //    {
-        //        Text = dto.Text,
-        //        MediaUrl = audioUrl,   // сюда пишем ссылку на голосовое сообщение
-        //        SentAt = DateTime.UtcNow,
-        //        SenderId = user.Id,
-        //        ChatId = chat.Id
-        //    };
-
-        //    _context.Messages.Add(message);
-        //    await _context.SaveChangesAsync();
-
-        //    await _hubContext.Clients.Group(dto.ChatId.ToString()).SendAsync("ReceiveMessage", new
-        //    {
-        //        message.Id,
-        //        message.Text,
-        //        message.MediaUrl,
-        //        message.SentAt,
-        //        Sender = user.Username
-        //    });
-
-        //    return Ok(message);
-        //}
+            var downloadInfo = await blobClient.DownloadAsync();
+            using var reader = new StreamReader(downloadInfo.Value.Content);
+            var json = await reader.ReadToEndAsync();
+            try
+            {
+                return JsonConvert.DeserializeObject<List<StoredMessageDto>>(json) ?? new List<StoredMessageDto>();
+            }
+            catch (Exception ex) {
+                return new List<StoredMessageDto>();
+            }
+        }
 
 
 
         [HttpGet("{chatId}")]
         public async Task<IActionResult> GetMessages(int chatId)
         {
-            var chat = await _context.Chats
-                .Include(c => c.Messages)
-                .ThenInclude(m => m.Sender)
-                .FirstOrDefaultAsync(c => c.Id == chatId);
 
-            if (chat == null)
-                return NotFound("Chat not found");
-
-            var messages = chat.Messages
-                .OrderBy(m => m.SentAt)
-                .Select(m => new MessageDto
-                {
-                    Id = m.Id,
-                    Text = m.Text,
-                    MediaUrl = m.MediaUrl,
-                    SentAt = m.SentAt,
-                    SenderUsername = m.Sender.Username,
-                    SenderId = m.Sender.Id,
-                    MediaType = m.MediaType
-                })
-                .ToList();
-
+            var messages = await GetMessagesFromBlobAsync(chatId.ToString());
             return Ok(messages);
+
+
+            //var chat = await _context.Chats
+            //    .Include(c => c.Messages)
+            //    .ThenInclude(m => m.Sender)
+            //    .FirstOrDefaultAsync(c => c.Id == chatId);
+
+            //if (chat == null)
+            //    return NotFound("Chat not found");
+
+            //var messages = chat.Messages
+            //    .OrderBy(m => m.SentAt)
+            //    .Select(m => new MessageDto
+            //    {
+            //        Id = m.Id,
+            //        Text = m.Text,
+            //        MediaUrl = m.MediaUrl,
+            //        SentAt = m.SentAt,
+            //        SenderUsername = m.Sender.Username,
+            //        SenderId = m.Sender.Id,
+            //        MediaType = m.MediaType
+            //    })
+            //    .ToList();
+
+            //return Ok(messages);
         }
 
-        [HttpDelete("{msgId}")]
-        public async Task<IActionResult> DeleteMessage(int msgId)
+        [HttpDelete("{chatId}/{msgId}")]
+        public async Task<IActionResult> DeleteMessage(int chatId, int msgId)
         {
-            var msg = await _context.Messages
-                .FirstOrDefaultAsync(c => c.Id == msgId);
+            var messages = await GetMessagesFromBlobAsync(chatId.ToString());
+            var msg =  messages.FirstOrDefault(c => c.MessageId == msgId);
+            messages.Remove(msg);
 
-            if (msg == null)
-                return NotFound("Message not found");
+            var updatedJson = JsonConvert.SerializeObject(messages, Formatting.Indented);
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(updatedJson));
 
-          
-            if (msg.MediaUrl != null && msg.MediaUrl.Length > 0)
-            {
-                await _blobService.DeleteFileAsync(msg.MediaUrl);
+            string blobFileName = $"chat_{chatId}.json";
+            string blobUrl = await _blobService.UploadStreamAsync(stream, blobFileName);
 
-            }
-            _context.Messages.Remove(msg);
 
-            await _context.SaveChangesAsync();
+
+            //var msg = await _context.Messages
+            //    .FirstOrDefaultAsync(c => c.Id == msgId);
+
+            //if (msg == null)
+            //    return NotFound("Message not found");
+
+
+            //if (msg.MediaUrl != null && msg.MediaUrl.Length > 0)
+            //{
+            //    await _blobService.DeleteFileAsync(msg.MediaUrl);
+
+            //}
+            //_context.Messages.Remove(msg);
+
+            //await _context.SaveChangesAsync();
 
             return Ok("Сообщение удалено");
         }

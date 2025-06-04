@@ -1,17 +1,21 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System;
+using System.IO;
 using Telegram_back.Models;
+using Telegram_back.Service;
 
 [ApiController]
 [Route("api/[controller]")]
 public class ChatsController : ControllerBase
 {
     private readonly ApplicationContext _context;
+    private readonly BlobService _blobService;
 
-    public ChatsController(ApplicationContext context)
+    public ChatsController(ApplicationContext context, BlobService blobService)
     {
         _context = context;
+        _blobService = blobService;
     }
 
     /// Поиск пользователей по имени.
@@ -80,6 +84,7 @@ public class ChatsController : ControllerBase
         if (users.Count != dto.UserIds.Count)
             return BadRequest("Один или несколько пользователей не найдены");
 
+
         var chat = new Chat
         {
             Title = dto.Title,
@@ -92,6 +97,11 @@ public class ChatsController : ControllerBase
         };
 
         _context.Chats.Add(chat);
+        await _context.SaveChangesAsync();
+
+        string blobFileName = $"chat_{chat.Id}.json";
+        string blobUrl = await _blobService.UploadStreamAsync(new MemoryStream(), blobFileName);
+        chat.FileUrl = blobUrl;
         await _context.SaveChangesAsync();
 
         return Ok(new { chat.Id, chat.Title, chat.IsGroup });
@@ -125,7 +135,9 @@ public class ChatsController : ControllerBase
     [HttpDelete("{chatId}")]
     public async Task<IActionResult> DeleteChat(int chatId)
     {
-        var chat = await _context.Chats
+        try
+        {
+            var chat = await _context.Chats
             .Include(c => c.Messages)
             .Include(c => c.ChatUsers)
             .FirstOrDefaultAsync(c => c.Id == chatId);
@@ -140,6 +152,11 @@ public class ChatsController : ControllerBase
         await _context.SaveChangesAsync();
 
         return Ok("Чат удалён");
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, $"Ошибка при удалении чата: {ex.Message}");
+        }
     }
 
 
