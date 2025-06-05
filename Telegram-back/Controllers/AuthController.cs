@@ -74,12 +74,12 @@ namespace Telegram_back.Controllers
                     await _context.SaveChangesAsync();
                 }
 
-                var token = _tokenService.GenerateJwtToken(user.Email, user.Username);
+                //var token = _tokenService.GenerateJwtToken(user.Email, user.Username);
 
                 return Ok(new
                 {
                     message = "Регистрация и загрузка аватара прошли успешно",
-                    token,
+                    token = user.Token,
                     avatarUrl
                 });
             }
