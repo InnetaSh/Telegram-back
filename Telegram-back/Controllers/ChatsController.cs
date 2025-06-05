@@ -151,7 +151,13 @@ public class ChatsController : ControllerBase
 
         await _context.SaveChangesAsync();
 
-        return Ok("Чат удалён");
+            if (chat.FileUrl != null && chat.FileUrl.Length > 0)
+            {
+                await _blobService.DeleteFileAsync(chat.FileUrl);
+
+            }
+
+            return Ok("Чат удалён");
         }
         catch (Exception ex)
         {

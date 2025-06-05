@@ -186,6 +186,13 @@ namespace Telegram_back.Controllers
         {
             var messages = await GetMessagesFromBlobAsync(chatId.ToString());
             var msg =  messages.FirstOrDefault(c => c.MessageId == msgId);
+
+            if (msg.MediaUrl != null && msg.MediaUrl.Length > 0)
+            {
+                await _blobService.DeleteFileAsync(msg.MediaUrl);
+
+            }
+
             messages.Remove(msg);
 
             var updatedJson = JsonConvert.SerializeObject(messages, Formatting.Indented);
