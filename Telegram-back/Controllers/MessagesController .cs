@@ -77,11 +77,14 @@ namespace Telegram_back.Controllers
                 MediaUrl = url,
                 SenderId = user.Id,
                 ChatId = chat.Id,
-                MediaType = dto.MediaType
+                MediaType = dto.MediaType,
+                SentAt = message.SentAt
+
+
             };
 
             var blobUrl = await AppendMessageToBlobAsync(messageNew);
-          
+
 
 
             await _hubContext.Clients.Group(dto.ChatId.ToString()).SendAsync("ReceiveMessage", new
@@ -89,10 +92,14 @@ namespace Telegram_back.Controllers
                 message.Id,
                 message.Text,
                 message.SentAt,
-                Sender = user.Username
+                SenderUsername = user.Username,
+                SenderId = user.Id,
+                message.MediaUrl,
+                message.MediaType,
+                message.ChatId
             });
 
-        
+
             var response = new MessageResponseDto
             {
                 Id = message.Id,

@@ -1,64 +1,69 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.CognitiveServices.Speech.Transcription;
+using System;
 using System.Threading.Tasks;
 using Telegram_back.Models;
+using Telegram_back.Service;
 
-[Authorize] // Требует авторизацию, если используешь JWT
+//[Authorize] 
 public class ChatHub : Hub
 {
     private readonly ApplicationContext _context;
+    private readonly BlobService _blobService;
 
-    public ChatHub(ApplicationContext context)
+    public ChatHub(ApplicationContext context, BlobService blobService)
     {
         _context = context;
+        _blobService = blobService;
     }
 
-    // Пользователь присоединяется к группе чата
-    public async Task JoinChat(string chatId)
+    public async Task SendMessage(SendMessageDto dto)
     {
-        await Groups.AddToGroupAsync(Context.ConnectionId, chatId);
-    }
+        var chat = await _context.Chats.FindAsync(dto.ChatId);
+        var user = await _context.Users.FindAsync(dto.SenderId);
+        if (chat == null || user == null) return ;
 
-    // Пользователь выходит из группы чата
-    public async Task LeaveChat(string chatId)
-    {
-        await Groups.RemoveFromGroupAsync(Context.ConnectionId, chatId);
-    }
-
-    // Метод отправки сообщения в чат
-    public async Task SendMessage(int chatId, string text, string? mediaUrl)
-    {
-        var userIdStr = Context.UserIdentifier; // или получаем из Claims
-        if (!int.TryParse(userIdStr, out var userId))
+        string url = null;
+        if (dto.MediaUrl != null && dto.MediaUrl.Length > 0)
         {
-            // Ошибка: пользователь не аутентифицирован или Id не определён
-            throw new HubException("Unauthorized user");
-        }
+            url = await _blobService.UploadFileAsync(dto.MediaUrl);
 
-        // Сохраняем сообщение в базе
+        }
         var message = new Message
         {
-            ChatId = chatId,
-            SenderId = userId,
-            Text = text,
-            MediaUrl = mediaUrl,
+            Text = dto.Text,
+            MediaUrl = url,
             SentAt = DateTime.UtcNow,
-            Status = MessageStatus.Sent
+            SenderId = user.Id,
+            ChatId = chat.Id,
+            MediaType = dto.MediaType
         };
+
 
         _context.Messages.Add(message);
         await _context.SaveChangesAsync();
 
-        // Отправляем сообщение всем участникам группы
-        await Clients.Group(chatId.ToString()).SendAsync("ReceiveMessage", new
+        // отправляем объект с обновленным Id и временем, как ответ клиентам
+        await Clients.Group(dto.ChatId.ToString()).SendAsync("ReceiveMessage", new
         {
             Id = message.Id,
-            ChatId = chatId,
-            SenderId = userId,
-            Text = text,
-            MediaUrl = mediaUrl,
+            Text = message.Text,
+            MediaUrl = message.MediaUrl,
             SentAt = message.SentAt,
-            Status = message.Status.ToString()
+            SenderId = message.SenderId,
+            ChatId = message.ChatId,
+            MediaType = message.MediaType
         });
+    }
+
+    public async Task JoinChat(int chatId)
+    {
+        await Groups.AddToGroupAsync(Context.ConnectionId, chatId.ToString());
+    }
+
+    public async Task LeaveChat(int chatId)
+    {
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, chatId.ToString());
     }
 }

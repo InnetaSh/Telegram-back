@@ -13,7 +13,10 @@ namespace Telegram_back.Service
             var containerName = config["AzureBlob:ContainerName"];
             var blobServiceClient = new BlobServiceClient(connection);
             _containerClient = blobServiceClient.GetBlobContainerClient(containerName);
+            Console.WriteLine($"Connecting to container: {containerName}");
+            Console.WriteLine($"Connection string: {connection}");
             _containerClient.CreateIfNotExists(PublicAccessType.Blob);
+          
         }
 
         public async Task<string> UploadFileAsync(IFormFile file)

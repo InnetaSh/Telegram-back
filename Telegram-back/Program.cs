@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Microsoft.Azure.SignalR;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -30,6 +31,19 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = jwtIssuer,
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
     };
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/chathub"))
+            {
+                context.Token = accessToken;
+            }
+            return Task.CompletedTask;
+        }
+    };
 });
 
 builder.Services.Configure<AzureSpeechSettings>(builder.Configuration.GetSection("AzureSpeech"));
@@ -40,16 +54,23 @@ builder.Services.AddDbContext<ApplicationContext>(options =>
 
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowReactApp", policy =>
+    options.AddPolicy("DynamicCorsPolicy", builder =>
     {
-        policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader();
+        builder
+            .SetIsOriginAllowed(origin =>
+                new[] { "http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "http://localhost:3003", "http://localhost:3004" }.Contains(origin))
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
     });
 });
 
 
-builder.Services.AddSignalR();
+builder.Services.AddSignalR()
+            .AddAzureSignalR(builder.Configuration["AzureSignalR:ConnectionString"]);
+
+
+
 builder.Services.AddControllers();
 builder.Services.AddHttpClient();
 
@@ -74,7 +95,7 @@ builder.Services.AddScoped<RegisterService>(provider =>
 var app = builder.Build();
 
 
-app.UseCors("AllowReactApp");
+app.UseCors("DynamicCorsPolicy");
 
 if (app.Environment.IsDevelopment())
 {
@@ -91,7 +112,10 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-app.MapHub<ChatHub>("/chathub");
+app.UseAzureSignalR(routes =>
+{
+    routes.MapHub<ChatHub>("/chathub");
+});
 
 app.Run();
 
